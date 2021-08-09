@@ -142,6 +142,8 @@ CONTAINER ID   IMAGE                                 COMMAND                  CR
  |
  -- containersDemo
   |
+  -- docker1
+  |
   -- src
    |
    -- index.php  
@@ -166,7 +168,7 @@ docker run -p 8085:80 -v /tmp/containersDemo/docker1/src:/var/www/html php:apach
 * The "-v" flag is used to mount a host path to a path in the container.
   * In this case is mounting the /tmp/containersDemo/docker1/src path from the host into the /var/www/html in the container.
     * This has the effect of adding the file: index.php to the /var/www/html path in the container which is the path where apache looks to find your application start page.
-* If you browse: http://8085 you should see the legend "Hello World"
+* If you browse: http://localhost:8085 you should see the legend "Hello World"
 
 ### Creating a PHP container to run our application with a Dockerfile
 
@@ -174,24 +176,307 @@ docker run -p 8085:80 -v /tmp/containersDemo/docker1/src:/var/www/html php:apach
  
 * In the previous example we mounted a path in the host to provide the source files for our application to the container.
 * It is better to create an image of all the application files needed to run our container. 
-  * The reason is that we can use the same image and release it in multiple environments.
+  * The reason is that we can use the same image and release it in multiple environments changing only the configuration.
 * To create a Docker Image we need a Dockerfile
 
 #### Create a Dockerfile
 
 * A Dockerfile is like a recipe to create an image.
 * Each line in a Dockerfile is an instruction that is executed to build an image.
-* In our case we want to create an image that start from the php:apache image and add our application in it
-*   
+* So first, let's copy our last example in a new directory docker2.
+* Then create an empty Dockerfile inside docker2 directory. 
+
+```
+ /tmp
+ |
+ -- containersDemo
+  |
+  -- docker2
+  |
+   -- Dockerfile
+   -- src
+    |
+    -- index.php  
+```
+
+* Edit the Dockerfile and paste this content:
+
+```
+FROM php:apache
+COPY src/ /var/www/html/
+EXPOSE 80
+```
+
+* Note that there are 3 instructions in this Dockerfile
+  * The first line (FROM instruction) will create an image starting from the image: php:apache of the official repository
+  * The second line (COPY instruction) will copy the src/ path in the host to the /var/www/html/ path in the image
+  * The third line (EXPOSE) functions as a type of documentation between the person who builds the image and the person who runs the container, about which ports are intended to be published.
+
+#### Build the image
+
+* After you have the Dockerfile, is time to build the image with the "docker build" command.
+
+```
+docker build -t php_img .
+```
+
+* The "-t" flag is the tag or name that we want to assign to this image
+* Note the dot at the end of the command, this means that we want to build the image from the current directory.
+* Once the image is built you can verify it by running docker images command
+
+```
+docker images
+```
+```
+REPOSITORY   TAG        IMAGE ID       CREATED         SIZE
+php_img      latest     3bd85bbab5db   7 days ago      417MB
+```
+
+#### Run a Container with the created image
+
+* Finally, we execute this docker command:
+```
+docker run -p 8085:80 php_image
+```
+
+* The php_image parameter indicates that we want to use the image that we just built.
+* In this case we have all the files inside the image that's why we don't need to mount a volume like in the previous example.  
+* The "-p" flag is used to publish a container port to a host port.
+  * In this case is publishing the port 80 of the container to the port 8085 in the host.
+* If you browse: http://localhost:8085 you should see the legend "Hello World"
+
+# **Docker Compose**
+
+## **What is Docker Compose?**
+
+* Docker Compose is a tool to define and run multi-container docker applications.
+
+## **How it Works?**
+
+Using docker compose is a two-step process
+* Create a YAML file to configure your application services.
+* Run the command docker-compose up to start the services defined in the YAML file created before.  
+
+## **Installation**
+
+* Docker Compose can be installed on Linux, Windows and macOS, for instructions refer to: https://docs.docker.com/compose/install/
+
+## **Examples**
+
+### PHP Application with Mysql
+
+#### Create the directory structure
+
+* In this example we can create the following directory structure, and a file index.php inside the src directory.
+* Note that the directory structure is arbitrary, built just for explanation purposes.
+```
+ /tmp
+ |
+ -- containersDemo
+  |
+  -- dockerCompose1
+  |
+  -- Dockerfile
+  -- docker-compose.yml
+  -- src
+   |
+   -- index.php
+  -- storage
+   |
+   -- mysql
+```
+
+#### Build the PHP Application Image
+
+**index.php**
+
+* First we are going to do edit the index.php to update the code to query a table of mysql database and show the results:
+
+```
+<?php
+echo "<html>";
+$conn = new mysqli("mysql8-service", "db_user", "db_password", "my_db");
+if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+}
+$sql = "SELECT name FROM user";
+$result = $conn->query($sql);
+if ($result->num_rows > 0) {
+  while($row = $result->fetch_assoc()) {
+    echo $row['name']."<br>";
+  }
+} else {
+  echo "0 results";
+}
+$conn->close();
+echo "</html>";
+?>
+```
+
+**Dockerfile**
+
+* Then we are going to edit the Dockerfile and add the following contents:
+  * As you notice the difference with the previous Dockerfile is this line: RUN docker-php-ext-install pdo pdo_mysql mysqli
+    * Docker provides docker-php-ext-install command to install PHP extensions and we want to have PHP installed for mysql.
+
+```
+FROM php:apache
+RUN apt-get update
+RUN docker-php-ext-install pdo pdo_mysql mysqli
+COPY src/ /var/www/html/
+EXPOSE 80
+```
+
+**Build**
+
+* Now that we have the application that we want to build, and the Dockerfile we can build the image:
+
+```
+sudo docker build -t usersapp:latest .
+```
+
+* This command will build the image and tag it as usersapp:latest 
+
+#### Creating the docker-compose.yml file to run the application
+
+* Now that we have the image of our application, lets write the docker-compose.yml file:
+
+**docker-compose.yml**
+
+```
+version: '2'
+services:
+  website:
+    container_name: usersapp
+    image: usersapp:latest
+    ports:
+      - 8088:80
+  mysql:
+     image: mysql:8.0
+     container_name: mysql
+     command: --default-authentication-plugin=mysql_native_password
+     volumes:
+       - /tmp/containersDemo/dockerCompose1/storage/mysql:/var/lib/mysql
+     environment:
+       - MYSQL_ROOT_PASSWORD=test
+       - MYSQL_DATABASE=my_db
+       - MYSQL_USER=db_user
+       - MYSQL_PASSWORD=db_password
+```
+
+* The format of the file is yaml and each block has an indentation of two spaces.
+* The very first line is about the version of docker-compose itself. In this case is version 2.
+* The ***services section*** will have a list of the applications that you want to run.
+  * I decided to use website for the php application and mysql to the mysql server. You can use any name you want.
+  * This name is going to identify the containers and to communicate between them.
+* Then on each service the meaning of some attributes:
+  * ***container_name:*** Is the name that we want to name the container, if not specified the name of the directory will be prepended.
+  * ***image:*** Is the image that you want to use to launch the container.
+  * ***ports:*** List of ports that you want to associate from the host to the container.
+    * In this case we want to associate the port 8080 of the host with the port 80 in the container.  
+  * ***command:*** The arguments that we want to send to the startup command in the container.
+    * In this case we want to use the mysql_native_password authenticator plugin for mysql.  
+  * ***volumes:*** The list of host paths that we want to mount on the container.
+    * We want to mount a host path in this case to store the mysql database. If we rebuild the container, the database data will survive.  
+  * ***environment:*** List of key/values that we want to set as environment variables in the container.
+    * In the mysql image these are used to set up the root password and the first database.
 
 
+#### Starting the application
 
+* Now that we have written the docker-compose file we can start it with the docker-compose up command
 
+```
+docker-compose up -d
+```
+```
+Creating usersapp ... done
+Creating mysql    ... done
+```
+  
+* After we start the application, we can see that the containers are running with the docker ps command
 
+```
+docker ps
+```
+```
+CONTAINER ID   IMAGE             COMMAND                  CREATED          STATUS          PORTS                  NAMES
+d2ae52d25131   mysql:8.0         "docker-entrypoint.s…"   36 seconds ago   Up 35 seconds   3306/tcp, 33060/tcp    mysql
+8d49687a60b1   usersapp:latest   "docker-php-entrypoi…"   36 seconds ago   Up 34 seconds   0.0.0.0:8088->80/tcp   usersapp
+```
 
+#### Configuring the database
 
+* When we started mysql we used this environment variables to create a database and a user with permissions to access it
+```  
+  - MYSQL_ROOT_PASSWORD=test
+  - MYSQL_DATABASE=my_db
+  - MYSQL_USER=db_user
+  - MYSQL_PASSWORD=db_password
+```
 
+* What we need to do now is to create a table into that database and add some users to it. 
+  
+***Access the running mysql container***
+```  
+docker exec -it mysql bash
+```
+```
+root@14590145fdef:/# 
+```
 
+***Access mysql in the container***
+* Use root user and password provided in the environment variable MYSQL_ROOT_PASSWORD
+```  
+root@14590145fdef:/# mysql -uroot -ptest
+```
+```
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 9
+Server version: 8.0.26 MySQL Community Server - GPL
+
+Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>  
+```
+
+***Create table user in my_db database and add two users in it***
+* The database my_db is created when we start the container because the docker image check for the environment variables:
+  * MYSQL_USER=db_user
+  * MYSQL_PASSWORD=db_password
+* In the mysql prompt copy and paste the following
+```  
+USE my_db;
+CREATE TABLE user (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+INSERT into user (name) values ("Michael");
+INSERT into user (name) values ("Tony");
+```
+
+***Exit mysql container***
+* Type exit two times to exit mysql and then the container
+```
+mysql> exit
+Bye
+root@14590145fdef:/# exit
+```
+
+#### Check that the application is running
+
+* Finally, we can access the application at http://localhost:8085 and check that is displaying the list of users:
+```
+Michael
+Tony
+```
 
 
 
