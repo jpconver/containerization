@@ -478,6 +478,47 @@ Michael
 Tony
 ```
 
+# **Kubernetes**
+
+## **Introduction**
+
+* With docker and docker-compose is very easy to divide an application into multiple containers and run it as a whole.
+* Now, imagine that you have a very popular application deployed with docker-compose, and you want to:
+  *  Add more containers and distribute traffic due to high load.
+  *  Release a new version of your application without downtime.
+  *  Detect if a container dies to start another container of the application.
+* For the cases detailed before, and many others Kubernetes is a very good  solution as it provides tools for distributing and escalating applications.
+
+## **What is Kubernetes?**
+* Kubernetes (k8s) is an open-source system for automating deployment, scaling, and management of containerized applications.
+* It groups containers that make up an application into logical units for easy management and discovery.
+* It provides a way to group existing or new containers and make them run as a single logical entity thus make it easy to automate operations like deployment and scaling.
+* It provides a way to orchestrate your containers.
+* Container orchestration is about managing life cycles of containers.
+   * In modern application development, a single application is divided into multiple units that are usually installed in containers.
+   * Container orchestration helps to run these individual units as a single app.
+   * Orchestration helps in provisioning and deployment of containers, resource allocation, load balancing, and many other things.
+
+## **Kubernetes Architecture**
+* A Typical Kubernetes installation consists of a master node and many worker nodes.
+  * A node is a virtual or physical machine.
+
+### **Master Node**
+
+* In the master runs what is called the ***Control Plane*** which is the nerve center that houses the components that control the cluster.
+* The ***Control Plane*** is composed by the following components:
+  * **API Server:** A REST API based server that allows the Administrator to perform several operations in the cluster like Pods creation, deployment etc.
+  * **Scheduler:** Watches for newly created Pods with no assigned node, and selects a node for them to run on.
+  * **Etcd:** Consistent and highly-available key value store used as Kubernetes' backing store for all cluster data.
+  * **Controller Manager:** It is responsible to manage different kinds of controllers offered by Kubernetes, some types are:
+     * *Node controller:* Responsible for noticing and responding when nodes go down.
+     * *Job controller:* Watches for Job objects that represent one-off tasks, then creates Pods to run those tasks to completion.
+     * *Endpoints controller:* Populates the Endpoints object (that is, joins Services & Pods).
+     * *Service Account & Token controllers:* Create default accounts and API access tokens for new namespaces
+
+### **Worker Node**
+
+
 
 
 
