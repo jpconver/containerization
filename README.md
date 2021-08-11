@@ -507,17 +507,73 @@ Tony
 
 * In the master runs what is called the ***Control Plane*** which is the nerve center that houses the components that control the cluster.
 * The ***Control Plane*** is composed by the following components:
-  * **API Server:** A REST API based server that allows the Administrator to perform several operations in the cluster like Pods creation, deployment etc.
+  * **API Server:**
+    * A REST API based server that allows the Administrator to perform several operations in the cluster like Pods creation, deployment etc.
   * **Scheduler:** Watches for newly created Pods with no assigned node, and selects a node for them to run on.
   * **Etcd:** Consistent and highly-available key value store used as Kubernetes' backing store for all cluster data.
   * **Controller Manager:** It is responsible to manage different kinds of controllers offered by Kubernetes, some types are:
-     * *Node controller:* Responsible for noticing and responding when nodes go down.
-     * *Job controller:* Watches for Job objects that represent one-off tasks, then creates Pods to run those tasks to completion.
-     * *Endpoints controller:* Populates the Endpoints object (that is, joins Services & Pods).
-     * *Service Account & Token controllers:* Create default accounts and API access tokens for new namespaces
+     * **Node controller:**
+       * Responsible for noticing and responding when nodes go down.
+     * **Job controller:**
+       * Watches for Job objects that represent one-off tasks, then creates Pods to run those tasks to completion.
+     * **Endpoints controller:**
+        * Populates the Endpoints object (that is, joins Services & Pods).
+     * **Service Account & Token controllers:**
+       * Create default accounts and API access tokens for new namespaces
 
 ### **Worker Node**
 
+* In the worker nodes run the following components:
+  * **Kubelet:**
+    * The main service on a node, regularly taking in new or modified pod specifications (primarily through the kube-apiserver) and ensuring that pods and their containers are healthy and running in the desired state.
+    * This component also reports to the master on the health of the host where it is running.
+  * **Kube-Proxy:**
+    * A proxy service that runs on each worker node to deal with individual host subnetting and expose services to the external world.
+    * It performs request forwarding to the correct pods/containers across the various isolated networks in a cluster.
+  * **Container Runtime:**
+    * The container runtime is the software that is responsible for running containers.
+    * Kubernetes supports several container runtimes: Docker, containerd, CRI-O, and any implementation of the Kubernetes CRI (Container Runtime Interface)
+
+## **Kubernetes Concepts**
+
+* Kubernetes uses different abstractions to represent the state of the system, such as nodes, services, pods, volumes, namespaces, and deployments.
+  * **Node:**
+    * A node may be a virtual or physical machine, depending on the cluster. Each node is managed by the control plane and contains the services necessary to run Pods.
+  * **Pod:**
+    * Refers to one or more containers that should be controlled as a single application. A pod encapsulates application containers, storage resources, a unique network ID and other configuration on how to run the containers.
+  * **Service:**
+    * A Service is an abstract way to expose an application running on a set of Pods as a network service.
+    * Pods are volatile, that is Kubernetes does not guarantee a given physical pod will be kept alive (for instance, the replication controller might kill and start a new set of pods).
+    * Instead, a service represents a logical set of pods and acts as a gateway, allowing (client) pods to send requests to the service without needing to keep track of which physical pods actually make up the service.
+  * **Volume:**
+    * A volume is a directory, possibly with some data in it, which is accessible to the containers in a pod.
+    * Kubernetes supports many types of volumes. A Pod can use any number of volume types simultaneously with different access modes.
+      * **Ephemeral volumes:** Have a lifetime of a pod, and when a pod ceases to exist, Kubernetes destroys them.
+      * **Persistent volumes:** Exist beyond the lifetime of a pod and data is preserved across container restarts.
+  * **Namespace:**
+     * Kubernetes supports multiple virtual clusters backed by the same physical cluster. These virtual clusters are called namespaces.
+     * Namespaces are intended to be used in environments where many users spread across multiple teams, or projects.
+     * Resources inside a namespace must be unique and cannot access resources in a different namespace.
+     * A namespace can be allocated a resource quota to avoid consuming more than its share of the physical cluster’s overall resources.
+  * **Deployment**
+    * A Kubernetes Deployment is used to tell Kubernetes how to create or modify instances of the pods that hold a containerized application.
+    * Deployments can scale the number of replica pods, enable rollout of updated code in a controlled manner, or roll back to an earlier deployment version if necessary.
+    * Since the Kubernetes deployment controller is always monitoring the health of pods and nodes, it can replace a failed pod or bypass down nodes, replacing those pods to ensure continuity of critical applications.
+    * Deployment is a resource to deploy a stateless application, if using a PVC, all replicas will be using the same Volume and none of it will have its own state.
+  * **Statefulset**
+    * Manages the deployment and scaling of a set of Pods, and provides guarantees about the ordering and uniqueness of these Pods.
+    * Like a Deployment, a StatefulSet manages Pods that are based on an identical container spec.
+    * Unlike a Deployment, a StatefulSet maintains a sticky identity for each of their Pods. These pods are created from the same spec, but are not interchangeable: each has a persistent identifier that it maintains across any rescheduling.
+    * Statefulsets are used for Stateful applications, each replica of the pod will have its own state, and will be using its own Volume.
+
+## **Installation**
+
+* Installing a Kubernetes cluster involve many steps in different servers or virtual machines
+* Fortunately, Kubernetes provides a tool called Minikube that is a single cluster based environment for local development and testing.
+* To install Minikube in your local workstation you can follow this documentation: https://minikube.sigs.k8s.io/docs/start/
+* In this presentation we are going to install Minikube on Linux using the Ubuntu 18 distribution.
+
+## **Installation on Linux - Ubuntu 18**
 
 
 
