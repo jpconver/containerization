@@ -665,7 +665,7 @@ docker build -t usersapp:latest .
 
 ### Create and deploy a deployment definition for the webserver
 
-####Step 1: Create a file: /tmp/containerization/kubernetes/webserver.yaml with the contents:
+#### Step 1: Create a file: /tmp/containerization/kubernetes/webserver.yaml with the contents:
 ```
 apiVersion: apps/v1
 kind: Deployment
@@ -730,7 +730,7 @@ webserver-5c495dfdc-w7stq   1/1     Running   0          5s
 
 * We need to create a persistent volume for mysql to preserve data across container restarts.
 
-####Step 1: Create a file: /tmp/containerization/kubernetes/mysql-pvc.yaml with the contents:
+#### Step 1: Create a file: /tmp/containerization/kubernetes/mysql-pvc.yaml with the contents:
 ```
 apiVersion: v1
 kind: PersistentVolumeClaim
