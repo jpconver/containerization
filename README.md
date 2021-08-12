@@ -140,7 +140,7 @@ CONTAINER ID   IMAGE                                 COMMAND                  CR
 ```
  /tmp
  |
- -- containersDemo
+ -- containerization
   |
   -- docker1
   |
@@ -158,7 +158,7 @@ CONTAINER ID   IMAGE                                 COMMAND                  CR
 
 * Finally, we execute this docker command:
 ```
-docker run -p 8085:80 -v /tmp/containersDemo/docker1/src:/var/www/html php:apache
+docker run -p 8085:80 -v /tmp/containerization/docker1/src:/var/www/html php:apache
 ```
 
 * The php:apache parameter indicates that we want to use this image from the official repository
@@ -166,7 +166,7 @@ docker run -p 8085:80 -v /tmp/containersDemo/docker1/src:/var/www/html php:apach
 * The "-p" flag is used to publish a container port to a host port. 
   * In this case is publishing the port 80 of the container to the port 8085 in the host.
 * The "-v" flag is used to mount a host path to a path in the container.
-  * In this case is mounting the /tmp/containersDemo/docker1/src path from the host into the /var/www/html in the container.
+  * In this case is mounting the /tmp/containerization/docker1/src path from the host into the /var/www/html in the container.
     * This has the effect of adding the file: index.php to the /var/www/html path in the container which is the path where apache looks to find your application start page.
 * If you browse: http://localhost:8085 you should see the legend "Hello World"
 
@@ -189,7 +189,7 @@ docker run -p 8085:80 -v /tmp/containersDemo/docker1/src:/var/www/html php:apach
 ```
  /tmp
  |
- -- containersDemo
+ -- containerization
   |
   -- docker2
   |
@@ -272,7 +272,7 @@ Using docker compose is a two-step process
 ```
  /tmp
  |
- -- containersDemo
+ -- containerization
   |
   -- dockerCompose1
   |
@@ -356,7 +356,7 @@ services:
      container_name: mysql
      command: --default-authentication-plugin=mysql_native_password
      volumes:
-       - /tmp/containersDemo/dockerCompose1/storage/mysql:/var/lib/mysql
+       - /tmp/containerization/dockerCompose1/storage/mysql:/var/lib/mysql
      environment:
        - MYSQL_ROOT_PASSWORD=test
        - MYSQL_DATABASE=my_db
@@ -568,12 +568,256 @@ Tony
 
 ## **Installation**
 
-* Installing a Kubernetes cluster involve many steps in different servers or virtual machines
+* Installing a Kubernetes cluster involve many steps in different servers or virtual machines.
 * Fortunately, Kubernetes provides a tool called Minikube that is a single cluster based environment for local development and testing.
 * To install Minikube in your local workstation you can follow this documentation: https://minikube.sigs.k8s.io/docs/start/
 * In this presentation we are going to install Minikube on Linux using the Ubuntu 18 distribution.
 
 ## **Installation on Linux - Ubuntu 18**
+
+* **Download and install Minikube using the Docker Driver**
+  * The docker driver allows running Kubernetes in a local workstation in a very lightweight fashion.
+```
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube start --driver=docker
+minikube config set driver docker
+```
+
+* **Download and install kubectl**
+  * kubectl is the Kubernetes command-line tool, kubectl, allows you to run commands against Kubernetes clusters.
+```
+curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+sudo mv ./kubectl /usr/local/bin/kubectl
+```
+
+## Example 1: PHP Application with Mysql in Kubernetes
+
+* Now It's time to migrate the application that we built using docker-compose to Kubernetes.
+
+### Build the Docker images in Minikube
+
+* Generally the nodes in a Kubernetes cluster have access to a company docker registry where the images are deployed after being built with a tool like Jenkins.
+* This allows Kubernetes to download docker images from this registry.
+* In our case we don't have a docker registry to upload the images, so we are going to build them inside Minikube.
+* Fortunately when you install Minikube, you also get a pre-installed docker.
+* The strategy that we are going to use is build the docker images using the docker inside Minikube.
+
+####Step 1: Configure your terminal to use the docker inside Minikube
+```
+eval $(minikube docker-env)
+```
+* After this command is executed, any docker command that you execute in the terminal will run against the docker inside minikube
+
+####Step 2: Configure the files for the image that we are going to build
+ * For this example we will have the following directory structure
+```
+ /tmp
+ |
+ -- containerization
+  |
+  Dockerfile
+  -- kubernetes
+   |
+   -- src
+    |
+    -- index.php
+```
+
+* Complete the Dockerfile with these contents:
+  * This is the same exact content that we have for the docker-compose example
+```
+FROM php:apache
+COPY src/ /var/www/html/
+EXPOSE 80
+```
+
+* Complete the index.php with these contents:
+  * Note that the only difference with the example that we used for docker-compose is the host that in this case is: "mysql8-service"
+    * We will see why shortly!
+```
+<?php
+echo "<html>";
+$conn = new mysqli("mysql8-service", "db_user", "db_password", "my_db");
+if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+}
+$sql = "SELECT name FROM user";
+$result = $conn->query($sql);
+if ($result->num_rows > 0) {
+  while($row = $result->fetch_assoc()) {
+    echo $row['name']."<br>";
+  }
+} else {
+  echo "0 results";
+}
+$conn->close();
+echo "</html>";
+?>
+```
+
+####Step 3: Build the image
+  * This command will build the image inside the docker in Minikube
+```
+docker build -t usersapp:latest .
+```
+
+### Create and deploy a deployment definition for the webserver
+
+####Step 1: Create a file: /tmp/containerization/kubernetes/webserver.yaml with the contents:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver
+  labels:
+    app: apache
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: userapp
+        image: usersapp:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+```
+* Notes:
+  * ***replicas: 3*** To define that we want to use 3 replicas of the application.
+  * ***containersPort: 80*** To define that the port that will be exposed is the port 80 of the container.
+  * ***selector field*** defines how the Deployment finds which Pods to manage.
+    * In this case, you select a label that is defined in the Pod template (app: apache)
+  * ***imagePullPolicy: IfNotPresent*** Is used to avoid kubernetes to try to download the image of a repository as we build it manually into the Docker minikube.
+
+####Step 2: Make sure that you are in the minikube context
+```
+kubectl config use-context minikube
+```
+####Step 3: Apply the definition to the cluster
+```
+kubectl create -f webserver.yaml
+```
+
+####Step 4: Verify that deployment and pods are running
+* We verify that we have 3/3 Pods Ready
+```
+kubectl get deployment
+```
+```
+NAME        READY   UP-TO-DATE   AVAILABLE   AGE
+webserver   3/3     3            3           92m
+```
+* We verify that all pods are running
+```
+kubectl get pod
+```
+```
+NAME                        READY   STATUS    RESTARTS   AGE
+webserver-5c495dfdc-6z84g   1/1     Running   0          5s
+webserver-5c495dfdc-jpl5g   1/1     Running   0          5s
+webserver-5c495dfdc-w7stq   1/1     Running   0          5s
+```
+
+### Create a persistent volume claim for mysql
+
+* We need to create a persistent volume for mysql to preserve data across container restarts.
+
+####Step 1: Create a file: /tmp/containerization/kubernetes/mysql-pvc.yaml with the contents:
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  labels:
+    app: mysql8
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+```
+####Step 2: Apply the definition to the cluster
+```
+kubectl create -f mysql-pvc.yaml
+```
+####Step 3: Verify that the Persistent Volume Claim & Persistent Volume is created
+```
+kubectl create -f mysql-pvc.yaml
+```
+```
+NAME             STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+mysql-pv-claim   Bound    pvc-ccb79793-a9f4-4494-8965-9239a35c8da9   5Gi        RWO            standard       3s
+```
+```
+kubectl get pv
+```
+```
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                    STORAGECLASS   REASON   AGE
+pvc-ccb79793-a9f4-4494-8965-9239a35c8da9   5Gi        RWO            Delete           Bound    default/mysql-pv-claim   standard                80s
+```
+
+* In this case what we need to check is the status that in this case is "Bound" meaning that it has been successfully allocated to the application.
+
+
+### Create and deploy a deployment definition for mysql
+
+####Step 1: Create a file: /tmp/containerization/kubernetes/mysql.yaml with the contents:
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql8
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql8
+    spec:
+      containers:
+      - image: mysql:8.0
+        name: mysql
+        imagePullPolicy: Never
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: test
+        - name: MYSQL_DATABASE
+          value: my_db
+        - name: MYSQL_USER
+          value: db_user
+        - name: MYSQL_PASSWORD
+          value: db_password
+        args: ["--default-authentication-plugin=mysql_native_password"]
+        ports:
+        - containerPort: 3306
+          name: mysql8
+        volumeMounts:
+          - name: mysql-persistent-storage
+            mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+```
+* Notes:
+  * The "env" key is used to send environment variables to the container needed by the mysql image to set up the database.
+  * The "args" key is used to send arguments to the command executed by the image when it starts.
+  * The "volumeMounts" key is used to mount persistent volumes to a path in the container
+  * The "volumes" key is used to link a persistent volume claim with a name, so it can be used in this definition.
+    * In this case we are mounting the Persistent Volume defined by the Persistent Volume Claim: mysql-pv-claim in the path: /var/lib/mysql
 
 
 
