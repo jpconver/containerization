@@ -604,13 +604,13 @@ sudo mv ./kubectl /usr/local/bin/kubectl
 * Fortunately when you install Minikube, you also get a pre-installed docker.
 * The strategy that we are going to use is build the docker images using the docker inside Minikube.
 
-####Step 1: Configure your terminal to use the docker inside Minikube
+#### Step 1: Configure your terminal to use the docker inside Minikube
 ```
 eval $(minikube docker-env)
 ```
 * After this command is executed, any docker command that you execute in the terminal will run against the docker inside minikube
 
-####Step 2: Configure the files for the image that we are going to build
+#### Step 2: Configure the files for the image that we are going to build
  * For this example we will have the following directory structure
 ```
  /tmp
@@ -657,7 +657,7 @@ echo "</html>";
 ?>
 ```
 
-####Step 3: Build the image
+#### Step 3: Build the image
   * This command will build the image inside the docker in Minikube
 ```
 docker build -t usersapp:latest .
@@ -697,16 +697,16 @@ spec:
     * In this case, you select a label that is defined in the Pod template (app: apache)
   * ***imagePullPolicy: IfNotPresent*** Is used to avoid kubernetes to try to download the image of a repository as we build it manually into the Docker minikube.
 
-####Step 2: Make sure that you are in the minikube context
+#### Step 2: Make sure that you are in the minikube context
 ```
 kubectl config use-context minikube
 ```
-####Step 3: Apply the definition to the cluster
+#### Step 3: Apply the definition to the cluster
 ```
 kubectl create -f webserver.yaml
 ```
 
-####Step 4: Verify that deployment and pods are running
+#### Step 4: Verify that deployment and pods are running
 * We verify that we have 3/3 Pods Ready
 ```
 kubectl get deployment
@@ -745,11 +745,11 @@ spec:
     requests:
       storage: 5Gi
 ```
-####Step 2: Apply the definition to the cluster
+#### Step 2: Apply the definition to the cluster
 ```
 kubectl create -f mysql-pvc.yaml
 ```
-####Step 3: Verify that the Persistent Volume Claim & Persistent Volume is created
+#### Step 3: Verify that the Persistent Volume Claim & Persistent Volume is created
 ```
 kubectl create -f mysql-pvc.yaml
 ```
@@ -770,7 +770,7 @@ pvc-ccb79793-a9f4-4494-8965-9239a35c8da9   5Gi        RWO            Delete     
 
 ### Create and deploy a deployment definition for mysql
 
-####Step 1: Create a file: /tmp/containerization/kubernetes/mysql.yaml with the contents:
+#### Step 1: Create a file: /tmp/containerization/kubernetes/mysql.yaml with the contents:
 ```
 apiVersion: apps/v1
 kind: Deployment
