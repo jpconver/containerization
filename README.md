@@ -407,7 +407,7 @@ d2ae52d25131   mysql:8.0         "docker-entrypoint.s…"   36 seconds ago   Up 
 
 #### Configuring the database
 
-* When we started mysql we used this environment variables to create a database and a user with permissions to access it
+* When we started mysql we used this environment variables to create a database, and a user with permissions to access it
 ```  
   - MYSQL_ROOT_PASSWORD=test
   - MYSQL_DATABASE=my_db
@@ -628,7 +628,13 @@ eval $(minikube docker-env)
 * Complete the Dockerfile with these contents:
   * This is the same exact content that we have for the docker-compose example
 ```
-FROM php:apache
+FROM php:7.3-apache
+RUN apt-get update
+RUN docker-php-ext-install pdo pdo_mysql mysqli
+RUN a2enmod rewrite
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+RUN php composer-setup.php --install-dir=. --filename=composer
+RUN mv composer /usr/local/bin/
 COPY src/ /var/www/html/
 EXPOSE 80
 ```
@@ -817,24 +823,237 @@ spec:
   * The "args" key is used to send arguments to the command executed by the image when it starts.
   * The "volumeMounts" key is used to mount persistent volumes to a path in the container
   * The "volumes" key is used to link a persistent volume claim with a name, so it can be used in this definition.
-    * In this case we are mounting the Persistent Volume defined by the Persistent Volume Claim: mysql-pv-claim in the path: /var/lib/mysql
+  * In this case we are mounting the Persistent Volume defined by the Persistent Volume Claim: mysql-pv-claim in the path: /var/lib/mysql
 
+#### Step 2: Apply the definition to the cluster
+```
+kubectl create -f mysql.yaml
+```
 
+### Create and deploy a service definition for the webserver
 
+* A service is responsible to make possible accessing multiple pods in a way that the end-user does not know which application instance is being used. When a user tries to access an app, for instance, a web server here, it actually makes a request to a service which itself then check where it should forward the request.
 
+#### Step 1: Create a file: /tmp/containerization/kubernetes/webserver-svc.yaml with the contents:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  labels:
+    run: web-service
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: apache
+```
+* Notes:
+  * We use "type: LoadBalancer" because we want the service to decide the best pod to serve the request.
+  * In the selector we are defining that this service applies to the pods with the tag "app: apache"
 
+#### Step 2: Apply the definition to the cluster
+```
+kubectl create -f webserver-svc.yaml
+```
 
+#### Step 3: Verify that the service is created
+```
+kubectl get service
+```
+```
+NAME          TYPE           CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
+web-service   LoadBalancer   10.96.149.205   <pending>     80:32757/TCP   3s
+```
+* Note that the External-IP is pending. This is because we are using Loadbalancer and since we are on minikube instead of some Cloud Provider, it will remain pending. In case if you run on Google Cloud or Azure you will get an IP for it.
 
+### Create and deploy a service definition for the mysql database
 
+* We are creating a service also for mysql
 
+#### Step 1: Create a file: /tmp/containerization/kubernetes/mysql-svc.yaml with the contents:
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql8-service
+  labels:
+    app: mysql8
+spec:
+  type: NodePort 
+  ports:
+  - port: 3306
+    protocol: TCP
+  selector:
+    app: mysql8
+```
+* Notes
+  * We use "type: NodePort" because we want to connect the MySQL client with the DB inside the cluster. I can do it with LoadBalancer as well but since we are using a single DB server so NodePort is good enough to do our work.
 
+#### Step 2: Apply the definition to the cluster
+```
+kubectl create -f mysql-svc.yaml
+```
 
+#### Step 3: Verify that the service is created
+```
+kubectl get service
+```
+```
+NAME             TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+mysql8-service   NodePort       10.105.224.230   <none>        3306:31846/TCP   6s
+web-service      LoadBalancer   10.96.149.205    <pending>     80:32757/TCP     16m
+```
 
-  
+### Create a table into that database and add some users to it.
 
+#### Step 1: List Running Pods
+```
+kubectl get pod
+```
+```
+NAME                        READY   STATUS    RESTARTS   AGE
+mysql-788fd8dc55-zdkkp      1/1     Running   0          114m
+webserver-5c495dfdc-b4vpq   1/1     Running   0          7m43s
+webserver-5c495dfdc-grbdg   1/1     Running   0          7m44s
+webserver-5c495dfdc-qgl4r   1/1     Running   0          7m43s
+```
 
+#### Step 2: Access the console of mysql pod with kubectl
+  * With the command exec we can access a running pod.
+  * We use the flag -i to access an interactive shell.
+  * We use the flag -t to use a terminal.
+  * We use the command bash to execute this command in the container that will bring a shell.
+``` 
+kubectl exec -it mysql-788fd8dc55-zdkkp bash
+```
+```
+root@mysql-788fd8dc55-zdkkp:/#
+```
 
+#### Step 3: Access mysql in the container
+* Use root user and password provided in the environment variable MYSQL_ROOT_PASSWORD
+``` 
+root@14590145fdef:/# mysql -uroot -ptest
+```
+```
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 9
+Server version: 8.0.26 MySQL Community Server - GPL
 
-  
+Copyright (c) 2000, 2021, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> 
+```
+
+#### Step 4: Create table user in my_db database and add two users in it
+* The database my_db is created when we start the container because the docker image check for the environment variables:
+  * MYSQL_USER=db_user
+  * MYSQL_PASSWORD=db_password
+* In the mysql prompt copy and paste the following
+``` 
+USE my_db;
+CREATE TABLE user (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+INSERT into user (name) values ("Michael");
+INSERT into user (name) values ("Tony");
+```
+
+#### Step 5: Exit mysql container
+* Type exit two times to exit mysql and then the container
+```
+mysql> exit
+Bye
+root@14590145fdef:/# exit
+```
+
+### Test the application
+
+* Finally, we have our web application running connected with a mysql database, lets test it.
+
+#### Step 1: Find out Minikube external IP
+* We use the minikube ip command
+* In my case it returned 192.168.49.2 but in your case can be a different IP
+```
+minikube ip
+```
+```
+192.168.49.2
+```
+
+#### Step 2: Find out the external port of the webserver service
+```
+kubectl get service
+```
+```
+NAME             TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)          AGE
+kubernetes       ClusterIP      10.96.0.1        <none>        443/TCP          17d
+mysql8-service   NodePort       10.105.224.230   <none>        3306:31846/TCP   102m
+web-service      LoadBalancer   10.96.149.205    <pending>     80:32757/TCP     118m
+```
+* In my case the web-service service is exposing the port 32757 to the internal pod port 80
+
+#### Step 3: Access the application
+* In your favourite web browser access  https://{MinikubeIP}:{externalWebServicePort}
+** In this case http://192.168.49.2:32757
+
+### Configure an Ingress to access your application using a URL
+* A Kubernetes Ingress is an API object that provides routing rules to manage access to the services within a Kubernetes cluster.
+* We will use it to add a rule to match a url name to our web-service
+
+#### Step 1: Create a file: /tmp/containerization/kubernetes/ingress.yaml with the contents:
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: usersapp-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+    - host: www.usersapp.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-service
+                port:
+                  number: 80
+```
+* Notes
+  * With this ingress definition we are matching the host name: www.usersapp.net to the service web-service at port 80
+
+#### Step 2: Apply the definition to the cluster
+```
+kubectl create -f ingress.yaml
+```
+
+#### Step 3: Add the entry into your /etc/hosts file
+  * This is needed so that your host knows that the domain name www.usersapp.net will be resolved to the IP of your minikube
+```
+sudo vi /etc/hosts
+```
+Add:
+```
+192.168.49.2    www.usersapp.net
+```
+* Change the IP for your Minikube IP
+
+#### Step 4: Test your application
+* Access your application at: http://www.usersapp.net
+
 
 
