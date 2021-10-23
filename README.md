@@ -1055,5 +1055,157 @@ Add:
 #### Step 4: Test your application
 * Access your application at: http://www.usersapp.net
 
+### Configure a ConfigMap & Secrets for the Mysql Deployment
 
+* A **Secret** is an object that contains a small amount of sensitive data such as a password, a token, or a key. Such information might otherwise be put in a Pod specification or in a container image. Using a Secret means that you don't need to include confidential data in your application code.
+* A **ConfigMap** is an API object used to store non-confidential data in key-value pairs. Pods can consume ConfigMaps as environment variables, command-line arguments, or as configuration files in a volume.
+A ConfigMap allows you to decouple environment-specific configuration from your container images, so that your applications are easily portable.
 
+* We are going to secure mysql passwords into a Secret and move the user database information to a configmap.
+
+#### Step 1: Create two secrets to store mysql passwords
+
+* Note that we can create secrets using a declarative approach, here we are using the imperative approach for convenience purposes.
+
+```
+kubectl create secret generic db-root-pass \
+  --from-literal=MYSQL_ROOT_PASSWORD=test
+
+kubectl create secret generic db-user-pass \
+  --from-literal=MYSQL_USER=db_user \
+  --from-literal=MYSQL_PASSWORD=db_password
+```
+
+#### Step 2: Create a configmap to store the user database information
+
+```
+kubectl create configmap userdb-config \
+  --from-literal=MYSQL_DATABASE=my_db
+```
+
+#### Step 3: Copy the file ./mysql.yaml to ./mysqlWithSecretAndConfigMap.yaml and update to use the secrets and configmap
+
+* The "env" section will be modified as follows:
+
+**before**
+```
+env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: test
+        - name: MYSQL_DATABASE
+          value: my_db
+        - name: MYSQL_USER
+          value: db_user
+        - name: MYSQL_PASSWORD
+          value: db_password
+```
+
+**after**
+```
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-root-pass
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: userdb-config
+              key: MYSQL_DATABASE
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-user-pass
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-user-pass
+              key: MYSQL_PASSWORD
+
+```
+
+#### Step 4: Delete the mysql deployment and apply the new one
+```
+kubectl delete deployment mysql
+kubectl create -f ./mysqlWithSecretAndConfigMap.yaml
+```
+
+### Just for Fun: Mount a configMap as a file to replace the home page of our application
+
+#### Step 1: Create a copy of index.php and update it
+
+* We are going to copy index.php to indexOverride.php
+* In this new file we are going to add message: This is an updated version of the app using a configmap at the top of the page
+
+```
+<?php
+echo "<html>";
+echo "<h1>This is an updated version of the app using a configmap</h1>";
+$conn = new mysqli("mysql8-service", "db_user", "db_password", "my_db");
+if ($conn->connect_error) {
+  die("Connection failed: " . $conn->connect_error);
+}
+$sql = "SELECT name FROM user";
+$result = $conn->query($sql);
+if ($result->num_rows > 0) {
+  while($row = $result->fetch_assoc()) {
+    echo $row['name']."<br>";
+  }
+} else {
+  echo "0 results";
+}
+$conn->close();
+echo "</html>";
+?>
+```
+
+#### Step 2: Create a configmap using this file
+```
+kubectl create configmap webapp-home-override --from-file=./indexOverride.php
+```
+
+#### Step 3: Copy the file ./webserver.yaml to ./webserverWithConfigMap.yaml and update to use the configmap
+
+* First: Add the volumes area to define the volume config-volume using the configmap webapp-home-override
+* Second: Add a volumeMounts are to mount the indexOverride.php file to the path: /var/www/html/index.php in the container
+
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver
+  labels:
+    app: apache
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: userapp
+        image: usersapp:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: config-volume
+            mountPath: /var/www/html/index.php
+            subPath: indexOverride.php
+      volumes:
+        - name: config-volume
+          configMap:
+            name: webapp-home-override
+```
+
+#### Step 4: Delete the webserver deployment and apply the new one
+```
+kubectl delete deployment webserver
+kubectl create -f ./webserverWithConfigMap.yaml
+```
