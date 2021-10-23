@@ -796,7 +796,7 @@ spec:
       containers:
       - image: mysql:8.0
         name: mysql
-        imagePullPolicy: Never
+        imagePullPolicy: IfNotPresent
         env:
         - name: MYSQL_ROOT_PASSWORD
           value: test
@@ -843,7 +843,7 @@ metadata:
   labels:
     run: web-service
 spec:
-  type: LoadBalancer
+  type: NodePort
   ports:
   - port: 80
     protocol: TCP
@@ -851,7 +851,7 @@ spec:
     app: apache
 ```
 * Notes:
-  * We use "type: LoadBalancer" because we want the service to decide the best pod to serve the request.
+  * We use "type: NodePort" because we want to access this service from outside the cluster using a port
   * In the selector we are defining that this service applies to the pods with the tag "app: apache"
 
 #### Step 2: Apply the definition to the cluster
@@ -882,7 +882,7 @@ metadata:
   labels:
     app: mysql8
 spec:
-  type: NodePort 
+  type: ClusterIP 
   ports:
   - port: 3306
     protocol: TCP
@@ -890,7 +890,7 @@ spec:
     app: mysql8
 ```
 * Notes
-  * We use "type: NodePort" because we want to connect the MySQL client with the DB inside the cluster. I can do it with LoadBalancer as well but since we are using a single DB server so NodePort is good enough to do our work.
+  * We use "type: ClusterIP" because we want to connect the MySQL client with the DB inside the cluster.
 
 #### Step 2: Apply the definition to the cluster
 ```
