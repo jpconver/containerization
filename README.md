@@ -834,7 +834,7 @@ kubectl create -f mysql.yaml
 
 * A service is responsible to make possible accessing multiple pods in a way that the end-user does not know which application instance is being used. When a user tries to access an app, for instance, a web server here, it actually makes a request to a service which itself then check where it should forward the request.
 
-#### Step 1: Create a file: /tmp/containerization/kubernetes/webserver-svc.yaml with the contents:
+#### Step 1: Create a file: /tmp/containerization/kubernetes/webserver-svc-nodeport.yaml with the contents:
 ```
 apiVersion: v1
 kind: Service
@@ -856,7 +856,7 @@ spec:
 
 #### Step 2: Apply the definition to the cluster
 ```
-kubectl create -f webserver-svc.yaml
+kubectl create -f webserver-svc-nodeport.yaml
 ```
 
 #### Step 3: Verify that the service is created
@@ -1208,4 +1208,80 @@ spec:
 ```
 kubectl delete deployment webserver
 kubectl create -f ./webserverWithConfigMap.yaml
+```
+
+### Use a StatefulSet instead of a deployment for the webserver
+
+#### Step 1: Create a definition for a Headless service that will be in charge of controlling the network domain
+
+* A StatefulSet needs a service to control the network domain
+  * For example to be able to ping from one pod to the other using a domain name like:
+  * webserver-1.web-service.default.svc.cluster.local
+  * In this case: web-service is the name of the service that we are going to create
+
+**Create a file with name: webserver-svc-headless.yaml**
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  labels:
+    run: web-service
+spec:
+  clusterIP: None
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: apache
+```
+
+#### Step 2: Apply the Headless service definition
+```
+kubectl create -f ./webserver-svc-headless.yaml
+```
+
+#### Step 3: Copy the file ./webserverWithConfigMap.yaml to ./webserverWithConfigMapStatefulset.yaml and update it to change the definition to a StatefulSet
+
+* In this case only two changes are needed:
+  * replace Kind of the object to StatefulSet
+  * add a serviceName key to point to the service created in step 2
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: webserver
+  labels:
+    app: apache
+spec:
+  serviceName: web-service
+...
+```
+
+#### Step 4: Apply the statefulset definition
+```
+kubectl create -f ./webserverWithConfigMapStatefulset.yaml
+```
+
+#### Results
+
+* Now, if you execute a kubectl get pod, each webserver pod will have a unique id
+  * Before with a Deployment the pods were interchangeable and have a hash that was changed if the pod is deleted for example.
+```
+kubectl get pod
+NAME                    READY   STATUS    RESTARTS   AGE
+mysql-db6674d57-hx224   1/1     Running   0          23h
+webserver-0             1/1     Running   0          19m
+webserver-1             1/1     Running   0          19m
+webserver-2             1/1     Running   0          19m
+```
+
+* Another consequence of using a statefulset is that pods can communicate among them using a constant domain name as shown in the following example:
+  * Note that "web-service" is the domain is the name of the service created in step 2
+```
+kubectl exec -it webserver-0 bash
+apt-get install iputils-ping
+ping webserver-0.web-service.default.svc.cluster.local
+ping webserver-1.web-service.default.svc.cluster.local
+ping webserver-2.web-service.default.svc.cluster.local
 ```
