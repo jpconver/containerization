@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: userdb-config
+data:
+  MYSQL_DATABASE: my_db
+

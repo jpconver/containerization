@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: webserver
+  labels:
+    app: apache
+spec:
+  serviceName: web-service
+  replicas: {{ .Values.webapp.replicas }}
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: userapp
+        image: usersapp:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: "{{ .Values.webapp.requestMemory }}"
+            cpu: "{{ .Values.webapp.requestCpu }}"
+          limits:
+            cpu: "{{ .Values.webapp.limitCpu }}"
+            memory: "{{ .Values.webapp.limitMemory }}"
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: config-volume
+            mountPath: /var/www/html/index.php
+            subPath: indexOverride.php
+      volumes:
+        - name: config-volume
+          configMap:
+            name: webapp-home-override
+
+
