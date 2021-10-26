@@ -1285,3 +1285,109 @@ ping webserver-0.web-service.default.svc.cluster.local
 ping webserver-1.web-service.default.svc.cluster.local
 ping webserver-2.web-service.default.svc.cluster.local
 ```
+
+# **Helm Charts**
+
+A chart is a collection of files that describe a related set of Kubernetes resources. A single chart might be used to deploy something simple, like a memcached pod, or something complex, like a full web app stack with HTTP servers, databases, caches, and so on.
+
+Charts are created as files laid out in a particular directory tree. They can be packaged into versioned archives to be deployed.
+
+What we are going to do is to migrate our usersapp application to two Helm Charts, one for the web application and other for the mysql.
+
+## **Installation**
+
+For install instructions refer to: https://helm.sh/docs/intro/install/
+Basically in Linux the procedure is downloading a tgz and installing it in the /usr/local/bin path
+
+```
+wget https://get.helm.sh/helm-v3.7.1-linux-amd64.tar.gz
+gunzip ./helm-v3.7.1-linux-amd64.tar.gz
+tar xvf ./helm-v3.7.1-linux-amd64.tar
+cp ./linux-amd64/helm /usr/local/bin/helm371
+sudo chmod ugo+x /usr/local/bin/helm371
+```
+
+## **Migrate the web application to a Helm Chart**
+
+### **Step 1: Create the directory structure**
+
+```
+ /tmp
+ |
+ -- containerization
+  |
+  Dockerfile
+  -- kubernetes
+   |
+   -- helm
+    |
+    -- webapp-chart
+     |
+     dev.yaml
+     -- webapp
+      |
+      Chart.yaml
+      values.yaml
+      templates
+```
+
+### **Step 2: Fill Chart.yaml file**
+
+* This file has just metadata information for the chart to be installed like description, name, version, etc.
+
+```
+apiVersion: v1
+appVersion: "1.0"
+description: The web application
+name: webapp
+version: 0.1.0
+```
+
+### **Step 3: Copy the file: /tmp/containerization/webserverWithConfigMapStatefulset.yaml /tmp/containerization/helm/webapp-chart/templates/statefulset.yaml and apply some changes**
+
+* Changes:
+  * Replace "replicas: 3" to use a helm variable defined in a configuration file.
+  * Add the resources section to define memory and cpu to use with values defined in a configuration file.
+
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: webserver
+  labels:
+    app: apache
+spec:
+  serviceName: web-service
+  replicas: {{ .Values.webapp.replicas }}
+  selector:
+    matchLabels:
+      app: apache
+  template:
+    metadata:
+      labels:
+        app: apache
+    spec:
+      containers:
+      - name: userapp
+        image: usersapp:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: "{{ .Values.webapp.requestMemory }}"
+            cpu: "{{ .Values.webapp.requestCpu }}"
+          limits:
+            cpu: "{{ .Values.webapp.limitCpu }}"
+            memory: "{{ .Values.webapp.limitMemory }}"
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: config-volume
+            mountPath: /var/www/html/index.php
+            subPath: indexOverride.php
+      volumes:
+        - name: config-volume
+          configMap:
+            name: webapp-home-override
+```
+
+### **Step 4: Copy the file: /tmp/containerization/webserverWithConfigMapStatefulset.yaml /tmp/containerization/helm/webapp-chart/templates/statefulset.yaml and apply some changes**
