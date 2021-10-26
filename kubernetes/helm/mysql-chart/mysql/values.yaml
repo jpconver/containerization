@@ -1,0 +1,7 @@
+mysql:
+  image: mysql:8.0
+  requestCpu: "0.2"
+  requestMemory: "0.5Gi"
+  limitCpu: "0.5"
+  limitMemory: "1Gi"
+  storage: 5Gi
