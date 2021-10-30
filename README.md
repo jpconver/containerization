@@ -1029,12 +1029,12 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: web-service
+                name: web-service-nodeport
                 port:
                   number: 80
 ```
 * Notes
-  * With this ingress definition we are matching the host name: www.usersapp.net to the service web-service at port 80
+  * With this ingress definition we are matching the host name: www.usersapp.net to the service web-service-nodeport at port 80
 
 #### Step 2: Apply the definition to the cluster
 ```
@@ -1307,9 +1307,17 @@ cp ./linux-amd64/helm /usr/local/bin/helm371
 sudo chmod ugo+x /usr/local/bin/helm371
 ```
 
-## **Migrate the web application to a Helm Chart**
+## Migrate the web application to a Helm Chart
 
-### **Step 1: Create the directory structure**
+* We are going to create two charts
+  * One for the website
+  * One for the mysql
+
+
+### Migrate the web application to a Helm Chart
+
+
+#### Step 1: Create the directory structure
 
 ```
  /tmp
@@ -1331,7 +1339,7 @@ sudo chmod ugo+x /usr/local/bin/helm371
       templates
 ```
 
-### **Step 2: Fill Chart.yaml file**
+#### Step 2: Fill Chart.yaml file
 
 * This file has just metadata information for the chart to be installed like description, name, version, etc.
 
@@ -1343,11 +1351,14 @@ name: webapp
 version: 0.1.0
 ```
 
-### **Step 3: Copy the file: /tmp/containerization/webserverWithConfigMapStatefulset.yaml /tmp/containerization/helm/webapp-chart/templates/statefulset.yaml and apply some changes**
+#### Step 3: Create statefulset definition template file 
+
+* Copy the file: ./kubernetes/webserverWithConfigMapStatefulset.yaml ./kubernetes/helm/webapp-chart/webapp/templates/statefulset.yaml and apply some changes
 
 * Changes:
   * Replace "replicas: 3" to use a helm variable defined in a configuration file.
   * Add the resources section to define memory and cpu to use with values defined in a configuration file.
+    * We are setting resources also with helm variables.
 
 ```
 apiVersion: apps/v1
@@ -1369,7 +1380,7 @@ spec:
     spec:
       containers:
       - name: userapp
-        image: usersapp:latest
+        image: {{ .Values.webapp.image }}
         imagePullPolicy: IfNotPresent
         resources:
           requests:
@@ -1390,4 +1401,102 @@ spec:
             name: webapp-home-override
 ```
 
-### **Step 4: Copy the file: /tmp/containerization/webserverWithConfigMapStatefulset.yaml /tmp/containerization/helm/webapp-chart/templates/statefulset.yaml and apply some changes**
+#### Step 4: Create the service definition template file
+
+* Copy the file: ./kubernetes/webserver-svc-headless.yaml to ./kubernetes/helm/webapp-chart/webapp/templates/service.yaml
+* No changes are needed in this file.
+
+#### Step 5: Create the ingress definition template file
+
+* Copy the file: ./kubernetes/webserver-svc-headless.yaml to ./kubernetes/helm/webapp-chart/webapp/templates/service.yaml
+* No changes are needed in this file.
+
+#### Step 6: Create the webapp override configmap definition template file
+
+* Create a file called: ./kubernetes/helm/webapp-chart/webapp/templates/webapp-override-config.yaml
+* Fill the file with the following contents:
+  * Note that in the last example we generated this definition using an imperative command, in this case we are using a declarative way of generating the configmap
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: webapp-home-override
+data:
+  indexOverride.php: |
+    <?php
+    echo "<html>";
+    echo "<h1>This is an updated version of the app using a configmap (version3) </h1>";
+    $conn = new mysqli("mysql8-service", "db_user", "db_password", "my_db");
+    if ($conn->connect_error) {
+      die("Connection failed: " . $conn->connect_error);
+    }
+    $sql = "SELECT name FROM user";
+    $result = $conn->query($sql);
+    if ($result->num_rows > 0) {
+      while($row = $result->fetch_assoc()) {
+        echo $row['name']."<br>";
+      }
+    } else {
+      echo "0 results";
+    }
+    $conn->close();
+    echo "</html>";
+    ?>
+
+```
+
+#### Step 7: Fill the default configuration file (values.yaml)
+
+* The default configuration to apply to the chart templates is written in the file values.yaml located in: ./kubernetes/helm/webapp-chart/webapp/values.yaml
+* For this example, fill the file: ./kubernetes/helm/webapp-chart/webapp/values.yaml with this contents
+
+```
+webapp:
+  image: usersapp:latest
+  requestCpu: "0.4"
+  requestMemory: "0.5Gi"
+  limitCpu: "0.5"
+  limitMemory: "1Gi"
+  replicas: 3
+```
+
+* In this case for example we are defining webapp.image = usersapp:latest.
+  * When the chart is applied to the cluster, in the statefulset.yaml defined before "{{ .Values.webapp.image }}" will be replaced for: usersapp:latest
+    * Note that configuration files have a tree structure and to refer to a value we start with ".Values"
+
+```
+- name: userapp
+  image: {{ .Values.webapp.image }}
+  imagePullPolicy: IfNotPresent
+```
+
+#### Step 8: Fill a custom environment configuration file (dev.yaml)
+
+* When we deploy a chart, we usually specify an environment configuration file
+* This configuration will overwrite all values defined in the file values.yaml
+* For our example will are going to fill this file with the following contents:
+
+```
+webapp:
+  image: usersapp:latest
+  requestCpu: "0.3"
+  requestMemory: "0.5Gi"
+  limitCpu: "0.5"
+  limitMemory: "1Gi"
+  replicas: 3
+```
+
+#### Step 9: Install the webapp chart in the cluster
+
+* Now that we have generated our chart directory structure, create the templates and the configuration files we can install the chart in the cluster with just one command
+* It's very important to change to the chart directory that we want to install
+
+```
+cd /tmp/containerization/kubernetes/helm/webapp-chart
+helm install webapp ./webapp -f ./dev.yaml
+```
+
+* After this command is executed, all the needed objects for the webapp will be installed to the cluster
+
+### Migrate the mysql application to a Helm Chart
