@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: userapp
-        image: usersapp:latest
+        image: "{{ .Values.webapp.image }}"
         imagePullPolicy: IfNotPresent
         resources:
           requests:
