@@ -13,6 +13,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: web-service
+                name: web-service-nodeport
                 port:
                   number: 80
