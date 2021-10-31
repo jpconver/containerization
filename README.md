@@ -1500,3 +1500,184 @@ helm install webapp ./webapp -f ./dev.yaml
 * After this command is executed, all the needed objects for the webapp will be installed to the cluster
 
 ### Migrate the mysql application to a Helm Chart
+
+#### Step 1: Create the directory structure
+
+```
+ /tmp
+ |
+ -- containerization
+  |
+  Dockerfile
+  -- kubernetes
+   |
+   -- helm
+    |
+    -- mysql-chart
+     |
+     dev.yaml
+     -- mysql
+      |
+      Chart.yaml
+      values.yaml
+      templates
+```
+
+#### Step 2: Fill Chart.yaml file
+
+* This file has just metadata information for the chart to be installed like description, name, version, etc.
+
+```
+apiVersion: v1
+appVersion: "1.0"
+description: The mysql service
+name: mysql
+version: 0.1.0
+```
+
+#### Step 3: Create statefulset definition template file
+
+* Copy the file: ./kubernetes/mysqlWithSecretAndConfigMap.yaml ./kubernetes/helm/mysql-chart/mysql/templates/statefulset.yaml and apply some changes
+
+* Changes:
+  * Replace the Kind: Deployment for StatefulSet
+  * Add a serviceName (due that a statefulset needs a service defined)
+  * Add a "resources" area to define required memory and cpu
+  * Add a volumeClaimTemplates area to make the request for the PVC in the definition of the statefulset
+    * If we do this we don't need to create the PVC, and it will be created automatically upon installation.
+
+```
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql8-service
+  selector:
+    matchLabels:
+      app: mysql8
+  template:
+    metadata:
+      labels:
+        app: mysql8
+    spec:
+      containers:
+      - image: mysql:8.0
+        name: mysql
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            memory: "{{ .Values.mysql.requestMemory }}"
+            cpu: "{{ .Values.mysql.requestCpu }}"
+          limits:
+            cpu: "{{ .Values.mysql.limitCpu }}"
+            memory: "{{ .Values.mysql.limitMemory }}"
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-root-pass
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: userdb-config
+              key: MYSQL_DATABASE
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-user-pass
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-user-pass
+              key: MYSQL_PASSWORD
+        args: ["--default-authentication-plugin=mysql_native_password"]
+        ports:
+        - containerPort: 3306
+          name: mysql8
+        volumeMounts:
+          - name: mysql-persistent-storage
+            mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim-mysql-0
+  volumeClaimTemplates:
+  - metadata:
+      name: mysql-pv-claim
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: "{{ .Values.mysql.storage }}"
+
+```
+
+#### Step 4: Create service definition template file
+
+* Copy the file: ./kubernetes/mysqlWithSecretAndConfigMap.yaml ./kubernetes/helm/mysql-chart/mysql/templates/statefulset.yaml and apply some changes
+* No changes are needed
+
+#### Step 5: Create the userdb-config configmap template file
+
+* Create a file called: ./kubernetes/helm/mysql-chart/mysql/templates/userdb-config.yaml
+* Fill the file with the following contents:
+  * Note that in the last example we generated this definition using an imperative command, in this case we are using a declarative way of generating the configmap
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: userdb-config
+data:
+  MYSQL_DATABASE: my_db
+```
+
+#### Step 7: Fill the default configuration file (values.yaml)
+
+```
+mysql:
+  image: mysql:8.0
+  requestCpu: "0.2"
+  requestMemory: "0.5Gi"
+  limitCpu: "0.5"
+  limitMemory: "1Gi"
+  storage: 5Gi
+```
+
+#### Step 8: Fill a custom environment configuration file (dev.yaml)
+
+```
+mysql:
+  image: mysql:8.0
+  requestCpu: "0.2"
+  requestMemory: "0.5Gi"
+  limitCpu: "0.5"
+  limitMemory: "1Gi"
+  storage: 5Gi
+```
+
+#### Step 9: Install the webapp chart in the cluster
+
+* **Important Note**
+  * Secrets needed by a chart are applied before the installation of the chart
+  * Generally the secrets are applied with an imperative command or with a file that only an operator have
+  * In this case if we are starting from scratch we need to apply the secrets before installing the mysql chart
+
+```
+kubectl create secret generic db-root-pass \
+  --from-literal=MYSQL_ROOT_PASSWORD=test
+
+kubectl create secret generic db-user-pass \
+  --from-literal=MYSQL_USER=db_user \
+  --from-literal=MYSQL_PASSWORD=db_password
+```
+
+* Now that we have the secrets installed we can proceed to install the chart
+
+```
+cd /tmp/containerization/kubernetes/helm/mysql-chart
+helm install mysql ./mysql -f ./dev.yaml
+```
