@@ -1701,3 +1701,36 @@ kubectl create secret generic db-user-pass \
 cd /tmp/containerization/kubernetes/helm/mysql-chart
 helm install mysql ./mysql -f ./dev.yaml
 ```
+
+#### Step 10: Fill Mysql database
+
+```
+kubectl exec -it mysql-0 bash
+mysql -uroot -ptest
+USE my_db;
+CREATE TABLE user (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL
+);
+INSERT into user (name) values ("Michael");
+INSERT into user (name) values ("Tony");
+exit
+exit
+```
+
+### Test the application
+
+```
+curl www.usersapp.net
+```
+
+### Uninstall charts & related objects
+
+* To delete charts execute this commands
+```
+helm delete mysql
+helm delete webapp
+kubectl delete pvc mysql-pv-claim-mysql-0
+kubectl delete secret db-root-pass
+kubectl delete secret db-user-pass
+```
