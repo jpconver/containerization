@@ -1258,8 +1258,9 @@ spec:
 ...
 ```
 
-#### Step 4: Apply the statefulset definition
+#### Step 4: Delete webapp deployment and Apply the statefulset definition
 ```
+kubectl delete deployment webserver
 kubectl create -f ./webserverWithConfigMapStatefulset.yaml
 ```
 
