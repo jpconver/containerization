@@ -1287,6 +1287,25 @@ ping webserver-1.web-service.default.svc.cluster.local
 ping webserver-2.web-service.default.svc.cluster.local
 ```
 
+#### Cleanup
+
+* To delete everything create so far execute the following commands
+
+```
+kubectl delete statefulset webserver
+kubectl delete deployment mysql
+kubectl delete service mysql8-service
+kubectl delete service web-service
+kubectl delete service web-service-nodeport
+kubectl delete ingress usersapp-ingress
+kubectl delete pvc mysql-pv-claim
+kubectl delete configmap userdb-config
+kubectl delete configmap webapp-home-override
+kubectl delete secret db-root-pass
+kubectl delete secret db-user-pass
+```
+
+
 # **Helm Charts**
 
 A chart is a collection of files that describe a related set of Kubernetes resources. A single chart might be used to deploy something simple, like a memcached pod, or something complex, like a full web app stack with HTTP servers, databases, caches, and so on.
